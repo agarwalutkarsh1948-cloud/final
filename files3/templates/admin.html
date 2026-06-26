@@ -309,7 +309,7 @@
         </div>
         <div class="stat-card">
           <div class="label">Contributors</div>
-          <div class="value">{{ notes|map(attribute='uploader')|unique|list|length }}</div>
+          <div class="value">{{ contributors }}</div>
           <div class="sub">Unique uploaders</div>
         </div>
       </div>
@@ -326,7 +326,7 @@
                 <span style="font-weight:600">{{ subj }}</span><span style="color:var(--muted)">{{ count }} notes</span>
               </div>
               <div style="height:6px;background:var(--surface2);border-radius:99px">
-                <div style="height:6px;background:var(--pink);border-radius:99px;width:{{ [(count / notes|length * 100)|int, 100]|min }}%"></div>
+                <div style="height:6px;background:var(--pink);border-radius:99px;width:{{ [(count / (approved_count or 1) * 100)|int, 100]|min }}%"></div>
               </div>
             </div>
             {% endfor %}
@@ -846,7 +846,7 @@
       current_password: document.getElementById('current_password').value,
       new_password: np,
     };
-    const res = await fetch('/admin/settings/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const res = await fetch('/admin/admins/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     const json = await res.json();
     if(json.success) {
       showToast('Password changed! Please login again.');
@@ -924,6 +924,64 @@
       showToast('Admin removed.');
     } else showToast(data.error || 'Error', true);
   }
+
+  // ── Admin Preview (for pending notes — no timer) ──
+  function adminPreview(note) {
+    const overlay = document.getElementById('previewOverlay');
+    overlay.classList.add('open');
+
+    document.getElementById('previewTitle').textContent = note.title;
+    document.getElementById('previewSubtitle').textContent =
+      note.subject + ' · ' + note.ext.toUpperCase() + ' · ' + note.size;
+    document.getElementById('previewMeta').textContent =
+      'By ' + note.uploader + ' · ' + note.uploaded_at;
+
+    const dlUrl = '/download/' + note.filename;
+    document.getElementById('previewDlBtn').href = dlUrl;
+    document.getElementById('previewDlBtn').setAttribute('download', note.original_name || note.filename);
+    document.getElementById('previewBlurDlBtn').href = dlUrl;
+
+    document.getElementById('previewBlurOverlay').classList.remove('show');
+    document.getElementById('previewTimerWrap').style.display = 'none';
+
+    const inner = document.getElementById('previewInner');
+    inner.innerHTML = '';
+    const previewUrl = '/preview/' + note.filename;
+    const ext = note.ext.toLowerCase();
+
+    if (ext === 'pdf') {
+      inner.innerHTML = '<iframe class="preview-iframe" src="' + previewUrl + '#toolbar=0&navpanes=0&scrollbar=1" allowfullscreen></iframe>';
+    } else if (['png','jpg','jpeg','gif','webp'].includes(ext)) {
+      inner.innerHTML = '<div class="preview-img-wrap"><img src="' + previewUrl + '" alt="' + note.title + '" /></div>';
+    } else if (ext === 'txt') {
+      fetch(previewUrl)
+        .then(r => r.text())
+        .then(text => {
+          const div = document.createElement('div');
+          div.className = 'preview-text-wrap';
+          div.textContent = text.slice(0, 5000) + (text.length > 5000 ? '\n\n[... truncated ...]' : '');
+          inner.appendChild(div);
+        })
+        .catch(() => { inner.innerHTML = '<div class="preview-unsupported"><i class="ti ti-file-off"></i><p>Preview unavailable</p></div>'; });
+    } else {
+      const fullUrl = window.location.origin + previewUrl;
+      inner.innerHTML = '<iframe class="preview-iframe" src="https://docs.google.com/gview?url=' + encodeURIComponent(fullUrl) + '&embedded=true" allowfullscreen></iframe>';
+    }
+  }
+
+  function closePreview() {
+    document.getElementById('previewOverlay').classList.remove('open');
+    document.getElementById('previewInner').innerHTML = '';
+    document.getElementById('previewBlurOverlay').classList.remove('show');
+    document.getElementById('previewTimerWrap').style.display = 'none';
+  }
+
+  document.getElementById('previewOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closePreview();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closePreview();
+  });
 
 </script>
 
