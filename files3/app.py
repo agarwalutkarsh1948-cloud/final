@@ -225,8 +225,12 @@ def upload_file():
 
 @app.route('/download/<filename>')
 def download_file(filename):
-    note = query("SELECT * FROM notes WHERE filename=%s AND status='approved'",
-                 (filename,), fetch='one')
+    is_admin = session.get('admin_logged_in', False)
+    if is_admin:
+        note = query("SELECT * FROM notes WHERE filename=%s", (filename,), fetch='one')
+    else:
+        note = query("SELECT * FROM notes WHERE filename=%s AND status='approved'",
+                     (filename,), fetch='one')
     if not note:
         return "File not available", 404
 
@@ -332,6 +336,7 @@ def admin_dashboard():
                            pending_count=pending,
                            admins=admins,
                            contributors=contributors,
+                           approved_count=len(approved),
                            current_admin=session.get('admin_username'),
                            current_role=session.get('admin_role'))
 
